@@ -1,7 +1,11 @@
 -- If you're looking to configure anything, you want config.lua. Nearly everything in this file is dictated by the config.
 
 -- Info on the data lifecycle and how we use it: https://github.com/Refactorio/RedMew/wiki/The-data-lifecycle
-_LIFECYCLE = 4 -- Control stage
+require 'resources.data_stages'
+_LIFECYCLE = _STAGE.control -- Control stage
+
+-- Overrides the _G.print function
+require 'utils.print_override'
 
 -- Omitting the math library is a very bad idea
 require 'utils.math'
@@ -21,7 +25,7 @@ require 'features.server_commands'
 -- Library modules
 -- If missing, will cause other feature modules to fail
 require 'features.player_create'
-require 'features.user_groups'
+require 'features.rank_system'
 
 -- Feature modules
 -- Each can be disabled safely
@@ -45,9 +49,6 @@ if config.admin_commands.enabled then
 end
 if config.redmew_commands.enabled then
     require 'features.redmew_commands'
-end
-if config.donator_messages.enabled then
-    require 'features.donator_messages'
 end
 if config.market.enabled then
     require 'features.market'
@@ -81,6 +82,9 @@ if config.camera.enabled then
 end
 if config.day_night.enabled then
     require 'map_gen.shared.day_night'
+end
+if config.apocalypse.enabled then
+    require 'features.apocalypse'
 end
 
 -- GUIs

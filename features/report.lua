@@ -2,6 +2,7 @@ local Gui = require 'utils.gui'
 local Utils = require 'utils.core'
 local Game = require 'utils.game'
 local Global = require 'utils.global'
+local Command = require 'utils.command'
 local Popup = require 'features.gui.popup'
 local Color = require 'resources.color_presets'
 
@@ -33,6 +34,19 @@ Global.register(
         jail_data = tbl.jail_data
     end
 )
+
+local function report_command(args, player)
+    local reported_player_name = args.player
+    local reported_player = game.players[reported_player_name]
+
+    if not reported_player then
+        Game.player_print(reported_player_name .. ' does not exist.')
+        return nil
+    end
+
+    Module.report(player, reported_player, args.message)
+    Game.player_print('Your report has been sent.')
+end
 
 local function draw_report(parent, report_id)
     local report = report_data[report_id]
@@ -138,19 +152,6 @@ function Module.report(reporting_player, reported_player, message)
     end
 end
 
-function Module.report_command(args, player)
-    local reported_player_name = args.player
-    local reported_player = game.players[reported_player_name]
-
-    if not reported_player then
-        Game.player_print(reported_player_name .. ' does not exist.')
-        return nil
-    end
-
-    Module.report(player, reported_player, args.message)
-    Game.player_print('Your report has been sent.')
-end
-
 --- Places a target in jail
 -- @param target_player <LuaPlayer> the target to jail
 -- @param player <LuaPlayer|nil> the admin as LuaPlayer or server as nil
@@ -198,7 +199,13 @@ function Module.jail(target_player, player)
     -- If in vehicle, kick them out and set the speed to 0.
     local vehicle = target_player.vehicle
     if vehicle then
-        vehicle.speed = 0
+        local train = vehicle.train
+        -- Trains can't have their speed set via ent.speed and instead need ent.train.speed
+        if train then
+            train.speed = 0
+        else
+            vehicle.speed = 0
+        end
         target_player.driving = false
     end
 
@@ -262,19 +269,19 @@ function Module.unjail(target_player, player)
 
     local target_name = target_player.name
     local target_index = target_player.index
-    local permissions = game.permissions
     local target_jail_data = jail_data[target_index]
 
-    -- Check if the permission group exists, if it doesn't, create it.
+    local permissions = game.permissions
+    local jail_permission_group = permissions.get_group(jail_name)
+    if (not jail_permission_group) or target_player.permission_group ~= jail_permission_group or not target_jail_data then
+        Game.player_print(format('%s is already not in Jail.', target_name))
+        return
+    end
+
+    -- Check if the player's former permission group exists, if it doesn't, create it.
     local permission_group = target_jail_data.perm_group or permissions.get_group(default_group)
     if not permission_group then
         permission_group = permissions.create_group(default_group)
-    end
-
-    local jail_permission_group = permissions.get_group(jail_name)
-    if (not jail_permission_group) or target_player.permission_group ~= jail_permission_group then
-        Game.player_print(format('%s is already not in Jail.', target_name))
-        return
     end
 
     -- Move player
@@ -329,7 +336,10 @@ Gui.on_click(
             Module.jail(target, event.player)
         else
             target_name = string.sub(event.element.caption, 8)
-            Module.unjail_player({['parameter'] = target_name, ['player'] = event.player})
+            target = game.players[target_name]
+            if target then
+                Module.unjail(target, event.player)
+            end
         end
         Module.show_reports(event.player)
         Module.show_reports(event.player) -- Double toggle, first destroy then draw.
@@ -413,6 +423,16 @@ Gui.on_click(
         print('You have successfully reported: ' .. Game.get_player_by_index(reported_player_index).name)
         print(prefix_e)
     end
+)
+
+Command.add(
+    'report',
+    {
+        description = 'Reports a user to admins',
+        arguments = {'player', 'message'},
+        capture_excess_arguments = true
+    },
+    report_command
 )
 
 return Module
